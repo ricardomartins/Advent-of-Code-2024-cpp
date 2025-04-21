@@ -13,52 +13,55 @@ const char EMPTY_VISITED = 'X';
 
 std::vector<std::vector<char> > world;
 
+int guardX = -1;
+int guardY = -1;
+char guardDirection;
+
 /**
 * returns false when the guard exits the world, true otherwise
 */
 auto iterateWorld() -> bool {
-    for (int y = 0; y < world.size(); y++) {
-        for (int x = 0; x < world[y].size(); x++) {
-            const char element = world[y][x];
-            int nextX;
-            int nextY;
-            char toRight;
-            switch (element) {
-                case GUARD_UP:
-                    nextX = x;
-                    nextY = y - 1;
-                    toRight = GUARD_RIGHT;
-                    break;
-                case GUARD_RIGHT:
-                    nextX = x + 1;
-                    nextY = y;
-                    toRight = GUARD_DOWN;
-                    break;
-                case GUARD_DOWN:
-                    nextX = x;
-                    nextY = y + 1;
-                    toRight = GUARD_LEFT;
-                    break;
-                case GUARD_LEFT:
-                    nextX = x - 1;
-                    nextY = y;
-                    toRight = GUARD_UP;
-                    break;
-                default: continue;
-            }
-            world[y][x] = EMPTY_VISITED;
-            if (nextX < 0 || nextX >= world[y].size() || nextY < 0 || nextY >= world.size()) {
-                return false;
-            }
-            if (world[nextY][nextX] == OBSTACLE) {
-                world[y][x] = toRight;
-            } else {
-                world[nextY][nextX] = element;
-            }
+    int forwardX = 0;
+    int forwardY = 0;
+    char toRight;
+
+    switch (guardDirection) {
+        case GUARD_UP:
+            forwardY = -1;
+            toRight = GUARD_RIGHT;
+            break;
+        case GUARD_RIGHT:
+            forwardX = 1;
+            toRight = GUARD_DOWN;
+            break;
+        case GUARD_DOWN:
+            forwardY = 1;
+            toRight = GUARD_LEFT;
+            break;
+        case GUARD_LEFT:
+            forwardX = -1;
+            toRight = GUARD_UP;
+            break;
+        default: break;
+    }
+    int x = guardX;
+    int y = guardY;
+    while (true) {
+        if (x < 0 || x >= world[guardY].size() || y < 0 || y >= world.size()) {
+            return false;
+        }
+        if (world[y][x] == OBSTACLE) {
+            guardDirection = toRight;
+            guardX = x - forwardX;
+            guardY = y - forwardY;
             return true;
         }
+
+        world[y][x] = EMPTY_VISITED;
+
+        x += forwardX;
+        y += forwardY;
     }
-    return true;
 }
 
 auto main() -> int {
@@ -71,9 +74,24 @@ auto main() -> int {
     long result = 0;
 
     std::string line;
+    int i = 0;
     while (std::getline(file, line)) {
-        std::vector vectorLine(line.begin(), line.end());
+        std::vector<char> vectorLine;
+        std::vector<char> solutionLine;
+        for (int j = 0; j < line.length(); j++) {
+            char element = line[j];
+            char solutionElement = element;
+            if (element == GUARD_UP || element == GUARD_DOWN || element == GUARD_LEFT || element == GUARD_RIGHT) {
+                guardX = j;
+                guardY = i;
+                guardDirection = element;
+                element = EMPTY;
+            }
+            vectorLine.push_back(element);
+            solutionLine.push_back(solutionElement);
+        }
         world.push_back(vectorLine);
+        i++;
     }
     file.close();
 
@@ -81,7 +99,7 @@ auto main() -> int {
 
     for (auto &row: world) {
         for (const auto &element: row) {
-            if (element == 'X') {
+            if (element == EMPTY_VISITED) {
                 result++;
             }
         }
