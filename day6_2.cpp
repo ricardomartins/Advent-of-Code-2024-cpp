@@ -3,145 +3,169 @@
 #include <string>
 #include <vector>
 
-constexpr char GUARD_UP = '^';
-constexpr char GUARD_DOWN = 'v';
-constexpr char GUARD_LEFT = '<';
-constexpr char GUARD_RIGHT = '>';
-constexpr char OBSTACLE = '#';
-constexpr char EMPTY = '.';
-constexpr char EMPTY_VISITED_BASE = 0b11110000;
-constexpr char EMPTY_VISITED_UP_FLAG = 0b00001000;
-constexpr char EMPTY_VISITED_DOWN_FLAG = 0b00000100;
-constexpr char EMPTY_VISITED_LEFT_FLAG = 0b00000010;
-constexpr char EMPTY_VISITED_RIGHT_FLAG = 0b00000001;
-constexpr char SOLUTION = 'O';
+const char OBSTACLE = '#';
+const char EMPTY = '.';
+const char EMPTY_SOLUTION = 'O';
+
+class Guard {
+public:
+    enum class Direction : char {
+        UP = '^',
+        RIGHT = '>',
+        DOWN = 'v',
+        LEFT = '<',
+    };
+
+    Guard(const int x, const int y, const Direction direction) : x(x), y(y), direction(direction) {
+    }
+
+    void move() {
+        switch (direction) {
+            case Direction::UP:
+                y--;
+                break;
+            case Direction::DOWN:
+                y++;
+                break;
+            case Direction::LEFT:
+                x--;
+                break;
+            case Direction::RIGHT:
+                x++;
+                break;
+        }
+    }
+
+    void turnRight() {
+        switch (direction) {
+            case Direction::UP:
+                direction = Direction::RIGHT;
+                break;
+            case Direction::DOWN:
+                direction = Direction::LEFT;
+                break;
+            case Direction::LEFT:
+                direction = Direction::UP;
+                break;
+            case Direction::RIGHT:
+                direction = Direction::DOWN;
+                break;
+        }
+    }
+
+    [[nodiscard]] int getX() const { return x; }
+    [[nodiscard]] int getY() const { return y; }
+    [[nodiscard]] Direction getDirection() const { return direction; }
+
+    [[nodiscard]] int getNextX() const {
+        return x + (direction == Direction::RIGHT ? 1 : direction == Direction::LEFT ? -1 : 0);
+    }
+
+    [[nodiscard]] int getNextY() const {
+        return y + (direction == Direction::DOWN ? 1 : direction == Direction::UP ? -1 : 0);
+    }
+
+    [[nodiscard]] int getPreviousX() const {
+        return -getNextX();
+    }
+
+    [[nodiscard]] int getPreviousY() const {
+        return -getNextY();
+    }
+
+private:
+    int x;
+    int y;
+    Direction direction;
+};
+
+Guard guard(-1, -1, Guard::Direction::UP);
 
 std::vector<std::vector<char> > world;
-std::vector<std::vector<char> > solution;
 
-int guardX = -1;
-int guardY = -1;
-char guardDirection;
+[[nodiscard]] bool findLoopForObstacleIn(const int obstacleX, const int obstacleY, Guard virtualGuard) {
+    std::cout << "Searching loop for : " << obstacleX << " , " << obstacleY << '\n';
 
-void print_world_state() {
-    std::cout << "\nEstado atual do mundo:" << std::endl;
-    for (const auto& linha : world) {
-        for (const char element : linha) {
-            // Verifica se é um elemento visitado (com flags)
-            if ((element & EMPTY_VISITED_BASE) == EMPTY_VISITED_BASE) {
-                const bool vertical = element & EMPTY_VISITED_UP_FLAG || element & EMPTY_VISITED_DOWN_FLAG;
-                const bool horizontal = element & EMPTY_VISITED_LEFT_FLAG || element & EMPTY_VISITED_RIGHT_FLAG;
+    std::vector<std::pair<int, int> > foundObstacles;
 
-                if (vertical && horizontal) {
-                    std::cout << '+';
-                } else if (vertical) {
-                    std::cout << '|';
-                } else if (horizontal) {
-                    std::cout << '-';
-                } else {
-                    std::cout << '.';
-                }
-            } else {
-                std::cout << element;
-            }
-        }
-        std::cout << std::endl;
-    }
-    std::cout << "Guard position: (" << guardX << ", " << guardY << "), Direction: " << guardDirection << std::endl;
-    std::cout << "------------------------" << std::endl;
-}
-
-/**
-* returns false when the guard exits the world, true otherwise
-*/
-auto iterateWorld() -> bool {
-    print_world_state();
-
-    int forwardX = 0;
-    int forwardY = 0;
-    char toRight;
-    char visitedFlag;
-    char toRightVisitedFlag;
-    char fromRightVisitedFlag;
-    switch (guardDirection) {
-        case GUARD_UP:
-            forwardY = -1;
-            toRight = GUARD_RIGHT;
-            visitedFlag = EMPTY_VISITED_UP_FLAG;
-            toRightVisitedFlag = EMPTY_VISITED_RIGHT_FLAG;
-            fromRightVisitedFlag = EMPTY_VISITED_LEFT_FLAG;
-            break;
-        case GUARD_RIGHT:
-            forwardX = 1;
-            toRight = GUARD_DOWN;
-            visitedFlag = EMPTY_VISITED_RIGHT_FLAG;
-            toRightVisitedFlag = EMPTY_VISITED_DOWN_FLAG;
-            fromRightVisitedFlag = EMPTY_VISITED_UP_FLAG;
-            break;
-        case GUARD_DOWN:
-            forwardY = 1;
-            toRight = GUARD_LEFT;
-            visitedFlag = EMPTY_VISITED_DOWN_FLAG;
-            toRightVisitedFlag = EMPTY_VISITED_LEFT_FLAG;
-            fromRightVisitedFlag = EMPTY_VISITED_RIGHT_FLAG;
-            break;
-        case GUARD_LEFT:
-            forwardX = -1;
-            toRight = GUARD_UP;
-            visitedFlag = EMPTY_VISITED_LEFT_FLAG;
-            toRightVisitedFlag = EMPTY_VISITED_UP_FLAG;
-            fromRightVisitedFlag = EMPTY_VISITED_DOWN_FLAG;
-            break;
-        default: break;
-    }
-    int x = guardX;
-    int y = guardY;
     while (true) {
-        if (x < 0 || x >= world[guardY].size() || y < 0 || y >= world.size()) {
+        const int currentX = virtualGuard.getX();
+        const int currentY = virtualGuard.getY();
+        const int nextX = virtualGuard.getNextX();
+        const int nextY = virtualGuard.getNextY();
+
+        // Guard left the world
+        if (currentX < 0 || currentX >= world[currentY].size() || currentY < 0 || currentY >= world.size()) {
+            std::cout << "Loop NOT FOUND for: " << obstacleX << " , " << obstacleY << '\n';
+            std::cout << "Found obstacles: " << '\n';
+            for (auto &foundObstacle: foundObstacles) {
+                std::cout << "- " << foundObstacle.first << " , " << foundObstacle.second << '\n';
+            }
             return false;
         }
-        if (world[y][x] == OBSTACLE) {
-            guardDirection = toRight;
-            guardX = x - forwardX;
-            guardY = y - forwardY;
-            break;
-        }
-        if (world[y][x] & toRightVisitedFlag) {
-            if (solution[y + forwardY][x + forwardX] == EMPTY) {
-                solution[y + forwardY][x + forwardX] = SOLUTION;
-            }
-        }
-        world[y][x] |= visitedFlag;
 
-        x += forwardX;
-        y += forwardY;
+        // Guard found an obstacle, so turn
+        if (nextX >= 0 && nextX < world[nextY].size() && nextY >= 0 && nextY < world.size() &&
+            world[nextY][nextX] == OBSTACLE || (obstacleX == nextX && obstacleY == nextY)
+        ) {
+            virtualGuard.turnRight();
+
+            foundObstacles.emplace_back(nextX, nextY);
+
+            if (foundObstacles.size() > 3) {
+                const std::pair<int, int> beforeLastObstacle = foundObstacles[foundObstacles.size() - 2];
+                const std::pair<int, int> lastObstacle = foundObstacles[foundObstacles.size() - 1];
+                for (int i = foundObstacles.size() - 4; i >= 0; i--) {
+                    if (beforeLastObstacle.first == foundObstacles[i].first &&
+                        beforeLastObstacle.second == foundObstacles[i].second &&
+                        lastObstacle.first == foundObstacles[i + 1].first &&
+                        lastObstacle.second == foundObstacles[i + 1].second
+                    ) {
+                        std::cout << "Loop WAS FOUND for: " << obstacleX << " , " << obstacleY << '\n';
+                        std::cout << "Found obstacles: " << '\n';
+                        for (auto &foundObstacle: foundObstacles) {
+                            std::cout << "- " << foundObstacle.first << " , " << foundObstacle.second << '\n';
+                        }
+                        return true;
+                    }
+                }
+            }
+            continue;
+        }
+
+        // Go forward
+        virtualGuard.move();
     }
-    x = guardX - forwardX;
-    y = guardY - forwardY;
+}
+
+void simulateWorld() {
+    Guard originalGuard(guard.getX(), guard.getY(), guard.getDirection());
     while (true) {
-        if (x < 0 || x >= world[guardY].size() || y < 0 || y >= world.size() || world[y][x] == OBSTACLE) {
-            break;
+        const int currentX = guard.getX();
+        const int currentY = guard.getY();
+        const int nextX = guard.getNextX();
+        const int nextY = guard.getNextY();
+
+        // Guard left the world
+        if (currentX < 0 || currentX >= world[currentY].size() || currentY < 0 || currentY >= world.size()) {
+            return;
         }
 
-        /*
-         * ^ - y-1 -> x-1
-         * > - x+1 -> y-1
-         * v - y+1 -> x+1
-         * < - x-1 -> y+1
-         */
-        if (world[y][x] & fromRightVisitedFlag) {
-            if (solution[y + forwardX][x - forwardY] == EMPTY) {
-                solution[y + forwardX][x - forwardY] = SOLUTION;
+        if (nextX >= 0 && nextX < world[nextY].size() && nextY >= 0 && nextY < world.size()) {
+            // Guard found an obstacle, so turn
+            if (world[nextY][nextX] == OBSTACLE) {
+                guard.turnRight();
+                continue;
+            }
+
+            if (findLoopForObstacleIn(nextX, nextY, Guard(originalGuard.getX(), originalGuard.getY(), originalGuard.getDirection()))) {
+                world[nextY][nextX] = EMPTY_SOLUTION;
             }
         }
 
-        world[y][x] |= visitedFlag;
-
-        x -= forwardX;
-        y -= forwardY;
+        // Go forward
+        guard.move();
     }
-
-    return true;
 }
 
 auto main() -> int {
@@ -159,31 +183,28 @@ auto main() -> int {
         for (int j = 0; j < line.length(); j++) {
             char element = line[j];
             char solutionElement = element;
-            if (element == GUARD_UP || element == GUARD_DOWN || element == GUARD_LEFT || element == GUARD_RIGHT) {
-                guardX = j;
-                guardY = i;
-                guardDirection = element;
-                element = EMPTY_VISITED_BASE;
-            } else if (element == EMPTY) {
-                element = EMPTY_VISITED_BASE;
+            if (element == static_cast<char>(Guard::Direction::UP) ||
+                element == static_cast<char>(Guard::Direction::DOWN) ||
+                element == static_cast<char>(Guard::Direction::LEFT) ||
+                element == static_cast<char>(Guard::Direction::RIGHT)) {
+                guard = Guard(j, i, static_cast<Guard::Direction>(element));
+                element = EMPTY;
             }
             vectorLine.push_back(element);
             solutionLine.push_back(solutionElement);
         }
-        solution.push_back(solutionLine);
         world.push_back(vectorLine);
         i++;
     }
     file.close();
 
-    while (iterateWorld()) {
-    }
+    simulateWorld();
 
-    long result = 0;
+    int result = 0;
 
-    for (auto &row: solution) {
+    for (auto &row: world) {
         for (const auto &element: row) {
-            if (element == SOLUTION) {
+            if (element == EMPTY_SOLUTION) {
                 result++;
             }
         }
